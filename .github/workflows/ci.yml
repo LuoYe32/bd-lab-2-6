@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  pull_request:
+    branches: ["main"]
+  push:
+    branches: ["main"]
+
+jobs:
+  test-build-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip uninstall -y pathspec || true
+          pip install -r requirements.txt
+          pip install "pathspec==0.12.1"
+
+      - name: Configure DVC (DagsHub)
+        run: |
+          dvc remote modify origin --local access_key_id "${{ secrets.DAGSHUB_ACCESS_KEY }}"
+          dvc remote modify origin --local secret_access_key "${{ secrets.DAGSHUB_SECRET_KEY }}"
+
+      - name: DVC pull data & artifacts
+        run: |
+          dvc pull -q || true
+
+      - name: Reproduce pipeline (train model)
+        run: |
+          dvc repro
+
+      - name: Run tests
+        run: |
+          pytest -q | tee test_output.txt
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        run: |
+          IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/bd-lab-1-6:latest"
+          docker build -t "$IMAGE" .
+          docker push "$IMAGE"
+
+      - name: Generate DevSecOps metadata
+        run: |
+          echo "docker_image:" > dev_sec_ops.yml
+          echo "  name: ${{ secrets.DOCKERHUB_USERNAME }}/bd-lab-1-6" >> dev_sec_ops.yml
+          echo "  tag: latest" >> dev_sec_ops.yml
+          echo "" >> dev_sec_ops.yml
+
+          echo "git:" >> dev_sec_ops.yml
+          echo "  last_5_commits:" >> dev_sec_ops.yml
+          git log -5 --pretty=format:"    - %H" >> dev_sec_ops.yml
+          echo "" >> dev_sec_ops.yml
+
+          echo "tests:" >> dev_sec_ops.yml
+          echo "  framework: pytest" >> dev_sec_ops.yml
+          echo "  result_summary:" >> dev_sec_ops.yml
+          tail -n 2 test_output.txt | sed 's/^/    /' >> dev_sec_ops.yml
+
+      - name: Upload DevSecOps metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: devsecops-report
+          path: dev_sec_ops.yml
