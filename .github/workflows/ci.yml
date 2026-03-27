@@ -28,22 +28,25 @@ jobs:
           pip install -r requirements.txt
           pip install "pathspec==0.12.1"
 
+      - name: Start Qdrant
+        run: docker run -d -p 6333:6333 --name qdrant qdrant/qdrant
+
       - name: Configure DVC (DagsHub)
         run: |
           dvc remote modify origin --local access_key_id "${{ secrets.DAGSHUB_ACCESS_KEY }}"
           dvc remote modify origin --local secret_access_key "${{ secrets.DAGSHUB_SECRET_KEY }}"
 
       - name: DVC pull data & artifacts
-        run: |
-          dvc pull -q || true
+        run: dvc pull -q || true
 
       - name: Reproduce pipeline (train model)
-        run: |
-          dvc repro
+        run: dvc repro
 
       - name: Run tests
-        run: |
-          pytest -q | tee test_output.txt
+        env:
+          QDRANT_HOST: localhost
+          QDRANT_PORT: 6333
+        run: pytest -q | tee test_output.txt
 
       - name: Login to DockerHub
         uses: docker/login-action@v3

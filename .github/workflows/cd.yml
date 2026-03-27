@@ -24,10 +24,21 @@ jobs:
           IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/bd-lab-1-6:latest"
           docker pull "$IMAGE"
 
-      - name: Run container
+      - name: Start Qdrant
+        run: docker run -d -p 6333:6333 --name qdrant qdrant/qdrant
+
+      - name: Run API container
         run: |
           IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/bd-lab-1-6:latest"
-          docker run -d --rm --name fashion_api -p 8000:8000 "$IMAGE"
+          docker run -d --rm \
+            --name fashion_api \
+            -p 8000:8000 \
+            -e QDRANT_HOST=host.docker.internal \
+            -e QDRANT_PORT=6333 \
+            "$IMAGE"
+
+      - name: Wait for API
+        run: sleep 10
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -47,6 +58,8 @@ jobs:
         if: failure()
         run: docker logs fashion_api || true
 
-      - name: Stop container
+      - name: Stop containers
         if: always()
-        run: docker stop fashion_api || true
+        run: |
+          docker stop fashion_api || true
+          docker stop qdrant || true
