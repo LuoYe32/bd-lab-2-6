@@ -4,7 +4,7 @@ services:
     ports:
       - "8000:8000"
     env_file:
-      - .env
+      - src/settings/.env
     environment:
       - QDRANT_HOST=qdrant
       - QDRANT_PORT=6333
