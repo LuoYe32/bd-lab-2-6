@@ -1,12 +1,14 @@
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 import joblib
 import numpy as np
 from fastapi import FastAPI, HTTPException, UploadFile, File
-from pydantic import BaseModel, Field
 from PIL import Image
 import io
+
+from src.database.qdrant_client import QdrantService
+from src.schemas import SimilarResponse, PredictRequest, PredictResponse
 
 MODEL_PATH = Path("artifacts/model.joblib")
 
@@ -24,29 +26,14 @@ CLASS_NAMES = {
 }
 
 
-class PredictRequest(BaseModel):
-    pixels: Optional[List[float]] = Field(
-        default=None,
-        description="Length 784 array"
-    )
-    fill: Optional[float] = Field(
-        default=None,
-        description="Fill all pixels with one value"
-    )
-    random_seed: Optional[int] = Field(
-        default=None,
-        description="Generate deterministic random pixels"
-    )
-
-
-class PredictResponse(BaseModel):
-    class_id: int
-    class_name: str
-    proba: List[float]
-
-
 app = FastAPI(title="Fashion-MNIST Classic ML API")
 _model = None
+
+try:
+    qdrant = QdrantService()
+except Exception as e:
+    print(f"Qdrant init error: {e}")
+    qdrant = None
 
 
 def _load_model():
@@ -60,38 +47,7 @@ def _load_model():
     return _model
 
 
-def _predict_array(x: np.ndarray):
-
-    model = _load_model()
-
-    if x.max() > 1.5:
-        x = x / 255.0
-
-    X = x.reshape(1, -1)
-
-    if hasattr(model, "predict_proba"):
-        proba = model.predict_proba(X)[0]
-        class_id = int(np.argmax(proba))
-    else:
-        class_id = int(model.predict(X)[0])
-        proba = np.zeros(10)
-        proba[class_id] = 1.0
-
-    return {
-        "class_id": class_id,
-        "class_name": CLASS_NAMES.get(class_id, str(class_id)),
-        "proba": [float(p) for p in proba],
-    }
-
-
-@app.get("/health")
-def health():
-    ok = MODEL_PATH.exists()
-    return {"status": "ok", "model_present": ok}
-
-
-@app.post("/predict", response_model=PredictResponse)
-def predict(req: PredictRequest):
+def build_vector_from_request(req: PredictRequest) -> np.ndarray:
 
     provided = [
         req.pixels is not None,
@@ -113,56 +69,32 @@ def predict(req: PredictRequest):
 
     if req.pixels is not None:
 
-        if not isinstance(req.pixels, list):
-            raise HTTPException(status_code=400, detail="pixels must be a list")
-
         if len(req.pixels) != 784:
-            raise HTTPException(
-                status_code=400,
-                detail="pixels must contain exactly 784 values"
-            )
+            raise HTTPException(status_code=400, detail="pixels must contain 784 values")
 
         try:
             x = np.array(req.pixels, dtype=np.float32)
         except Exception:
-            raise HTTPException(
-                status_code=400,
-                detail="pixels must contain numeric values"
-            )
+            raise HTTPException(status_code=400, detail="Invalid pixel values")
 
         if not np.isfinite(x).all():
-            raise HTTPException(
-                status_code=400,
-                detail="pixels must not contain NaN or infinite values"
-            )
+            raise HTTPException(status_code=400, detail="pixels contain NaN or inf")
 
         if x.min() < 0:
-            raise HTTPException(
-                status_code=400,
-                detail="pixels must be non-negative"
-            )
+            raise HTTPException(status_code=400, detail="pixels must be non-negative")
 
     elif req.fill is not None:
 
         try:
             fill_value = float(req.fill)
         except Exception:
-            raise HTTPException(
-                status_code=400,
-                detail="fill must be numeric"
-            )
+            raise HTTPException(status_code=400, detail="fill must be numeric")
 
         if not np.isfinite(fill_value):
-            raise HTTPException(
-                status_code=400,
-                detail="fill must be a finite number"
-            )
+            raise HTTPException(status_code=400, detail="fill must be finite")
 
         if fill_value < 0:
-            raise HTTPException(
-                status_code=400,
-                detail="fill must be non-negative"
-            )
+            raise HTTPException(status_code=400, detail="fill must be non-negative")
 
         x = np.full((784,), fill_value, dtype=np.float32)
 
@@ -171,19 +103,68 @@ def predict(req: PredictRequest):
         try:
             seed = int(req.random_seed)
         except Exception:
-            raise HTTPException(
-                status_code=400,
-                detail="random_seed must be an integer"
-            )
+            raise HTTPException(status_code=400, detail="random_seed must be int")
 
         if seed < 0:
-            raise HTTPException(
-                status_code=400,
-                detail="random_seed must be non-negative"
-            )
+            raise HTTPException(status_code=400, detail="random_seed must be non-negative")
 
         rng = np.random.default_rng(seed)
         x = rng.random(784)
+
+    else:
+        raise HTTPException(status_code=500, detail="Unexpected error")
+
+    try:
+        if x.max() > 1.5:
+            x = x / 255.0
+    except Exception:
+        raise HTTPException(status_code=400, detail="Normalization error")
+
+    return x
+
+
+def _predict_array(x: np.ndarray):
+
+    model = _load_model()
+
+    if x.max() > 1.5:
+        x = x / 255.0
+
+    X = x.reshape(1, -1)
+
+    if hasattr(model, "predict_proba"):
+        proba = model.predict_proba(X)[0]
+        class_id = int(np.argmax(proba))
+    else:
+        class_id = int(model.predict(X)[0])
+        proba = np.zeros(10)
+        proba[class_id] = 1.0
+
+    result = {
+        "class_id": class_id,
+        "class_name": CLASS_NAMES.get(class_id, str(class_id)),
+        "proba": [float(p) for p in proba],
+    }
+
+    if qdrant is not None:
+        try:
+            qdrant.save_prediction(x, result)
+        except Exception as e:
+            print(f"Qdrant save error: {e}")
+
+    return result
+
+
+@app.get("/health")
+def health():
+    ok = MODEL_PATH.exists()
+    return {"status": "ok", "model_present": ok}
+
+
+@app.post("/predict", response_model=PredictResponse)
+def predict(req: PredictRequest):
+
+    x = build_vector_from_request(req)
 
     return _predict_array(x)
 
@@ -225,7 +206,7 @@ async def predict_image(file: UploadFile = File(...)):
 
 
 @app.get("/predict/random", response_model=PredictResponse)
-def predict_random(seed: int | None = None):
+def predict_random(seed: Optional[int] = None):
 
     if seed is not None:
         if seed < 0:
@@ -236,3 +217,29 @@ def predict_random(seed: int | None = None):
         x = np.random.random(784)
 
     return _predict_array(x)
+
+
+@app.post("/similar", response_model=SimilarResponse)
+def find_similar(req: PredictRequest, limit: int = 5):
+
+    if qdrant is None:
+        raise HTTPException(status_code=500, detail="Qdrant not available")
+
+    try:
+        x = build_vector_from_request(req)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid input: {e}")
+
+    try:
+        results = qdrant.search_similar(x, limit=limit)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Qdrant search error: {str(e)}"
+        )
+
+    return {
+        "results": results
+    }
