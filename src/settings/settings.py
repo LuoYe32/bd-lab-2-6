@@ -10,19 +10,19 @@ class Settings(BaseSettings):
     app_name: str = "Fashion MNIST API"
 
     # Qdrant
-    qdrant_host: str = Field(default="localhost")
-    qdrant_port: int = Field(default=6333)
+    qdrant_host: str = "localhost"
+    qdrant_port: int = 6333
 
-    # DVC / DagsHub
+    # DagsHub
     dagshub_access_key: Optional[str] = None
     dagshub_secret_key: Optional[str] = None
 
     # Docker
     docker_image: str = "bd-lab-1-6:latest"
 
-    class ConfigDict:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
+    model_config = {
+        "env_file": ".env",
+    }
 
 
 settings = Settings()
