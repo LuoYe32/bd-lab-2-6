@@ -71,7 +71,7 @@ jobs:
       - name: Run API container
         run: |
           IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/bd-lab-2-6:latest"
-          docker run -d --rm \
+          docker run -d \
             --network app-net \
             --name fashion_api \
             -p 8000:8000 \
@@ -79,6 +79,9 @@ jobs:
             -e QDRANT_PORT=${{ secrets.QDRANT_PORT }} \
             -e QDRANT_API_KEY=${{ secrets.QDRANT_API_KEY }} \
             "$IMAGE"
+
+      - name: Show running containers
+        run: docker ps -a
 
       - name: Wait for API ready
         run: |
