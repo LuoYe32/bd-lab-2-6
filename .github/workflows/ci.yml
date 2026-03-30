@@ -30,7 +30,10 @@ jobs:
 
       - name: Start Qdrant
         run: |
-          docker run -d -p 6333:6333 \
+          docker network create app-net || true
+
+          docker run -d \
+            --network app-net \
             -e QDRANT__SERVICE__API_KEY=${{ secrets.QDRANT_API_KEY }} \
             --name qdrant \
             qdrant/qdrant
@@ -48,7 +51,7 @@ jobs:
 
       - name: Run tests
         env:
-          QDRANT_HOST: localhost
+          QDRANT_HOST: ${{ secrets.QDRANT_HOST }}
           QDRANT_PORT: ${{ secrets.QDRANT_PORT }}
           QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
         run: pytest -q | tee test_output.txt
