@@ -51,6 +51,7 @@ jobs:
 
           docker run -d \
             --network app-net \
+            -p ${{ secrets.QDRANT_PORT }}:${{ secrets.QDRANT_PORT }}
             -e QDRANT__SERVICE__API_KEY=${{ secrets.QDRANT_API_KEY }} \
             --name qdrant \
             qdrant/qdrant
