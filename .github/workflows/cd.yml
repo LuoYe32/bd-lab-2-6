@@ -57,7 +57,7 @@ jobs:
           for i in {1..30}; do
             if curl -s \
               -H "api-key: ${{ secrets.QDRANT_API_KEY }}" \
-              http://localhost:6333/health | grep -q '"status":"ok"'; then
+              http://localhost:6333 | grep -q '"status":"ok"'; then
               echo "Qdrant is ready"
               exit 0
             fi
