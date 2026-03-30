@@ -75,9 +75,11 @@ jobs:
             --network app-net \
             --name fashion_api \
             -p 8000:8000 \
-            -e QDRANT_HOST=${{ secrets.QDRANT_HOST }} \
-            -e QDRANT_PORT=${{ secrets.QDRANT_PORT }} \
+            -e QDRANT_HOST=qdrant \
+            -e QDRANT_PORT=6333 \
             -e QDRANT_API_KEY=${{ secrets.QDRANT_API_KEY }} \
+            -e DAGSHUB_ACCESS_KEY=${{ secrets.DAGSHUB_ACCESS_KEY }} \
+            -e DAGSHUB_SECRET_KEY=${{ secrets.DAGSHUB_SECRET_KEY }} \
             "$IMAGE"
 
       - name: Show running containers
