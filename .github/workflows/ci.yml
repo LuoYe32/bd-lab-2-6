@@ -29,7 +29,11 @@ jobs:
           pip install "pathspec==0.12.1"
 
       - name: Start Qdrant
-        run: docker run -d -p 6333:6333 --name qdrant qdrant/qdrant
+        run: |
+          docker run -d -p 6333:6333 \
+            -e QDRANT__SERVICE__API_KEY=${{ secrets.QDRANT_API_KEY }} \
+            --name qdrant \
+            qdrant/qdrant
 
       - name: Configure DVC (DagsHub)
         run: |
@@ -45,7 +49,8 @@ jobs:
       - name: Run tests
         env:
           QDRANT_HOST: localhost
-          QDRANT_PORT: 6333
+          QDRANT_PORT: ${{ secrets.QDRANT_PORT }}
+          QDRANT_API_KEY: ${{ secrets.QDRANT_API_KEY }}
         run: pytest -q | tee test_output.txt
 
       - name: Login to DockerHub

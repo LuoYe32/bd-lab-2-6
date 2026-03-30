@@ -25,7 +25,11 @@ jobs:
           docker pull "$IMAGE"
 
       - name: Start Qdrant
-        run: docker run -d -p 6333:6333 --name qdrant qdrant/qdrant
+        run: |
+          docker run -d -p 6333:6333 \
+            -e QDRANT__SERVICE__API_KEY=${{ secrets.QDRANT_API_KEY }} \
+            --name qdrant \
+            qdrant/qdrant
 
       - name: Run API container
         run: |
@@ -34,7 +38,8 @@ jobs:
             --name fashion_api \
             -p 8000:8000 \
             -e QDRANT_HOST=host.docker.internal \
-            -e QDRANT_PORT=6333 \
+            -e QDRANT_PORT=${{ secrets.QDRANT_PORT }} \
+            -e QDRANT_API_KEY=${{ secrets.QDRANT_API_KEY }} \
             "$IMAGE"
 
       - name: Wait for API

@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     # Qdrant
     qdrant_host: str = "localhost"
     qdrant_port: int = 6333
+    qdrant_api_key: Optional[str] = None
 
     # DagsHub
     dagshub_access_key: Optional[str] = None
