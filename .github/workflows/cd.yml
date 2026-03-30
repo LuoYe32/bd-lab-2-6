@@ -63,8 +63,18 @@ jobs:
             -e QDRANT_API_KEY=${{ secrets.QDRANT_API_KEY }} \
             "$IMAGE"
 
-      - name: Wait for API
-        run: sleep 10
+      - name: Wait for API ready
+        run: |
+          for i in {1..30}; do
+            if curl -s http://localhost:8000/health | grep -q "ok"; then
+              echo "API is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "API not ready"
+          docker logs fashion_api
+          exit 1
 
       - name: Set up Python
         uses: actions/setup-python@v5
