@@ -55,9 +55,9 @@ jobs:
       - name: Wait for Qdrant
         run: |
           for i in {1..30}; do
-            if curl -s \
+            if curl -sf \
               -H "api-key: ${{ secrets.QDRANT_API_KEY }}" \
-              http://localhost:6333 | grep -q '"status":"ok"'; then
+              http://localhost:6333 > /dev/null; then
               echo "Qdrant is ready"
               exit 0
             fi
