@@ -51,19 +51,6 @@ jobs:
             --name qdrant \
             qdrant/qdrant
 
-      - name: Wait for Qdrant
-        run: |
-          for i in {1..100}; do
-            if curl -s http://localhost:6333/health | grep -q '"status":"ok"'; then
-              echo "Qdrant is ready"
-              exit 0
-            fi
-            echo "Waiting for Qdrant..."
-            sleep 2
-          done
-          echo "Qdrant failed to start"
-          exit 1
-
       - name: Run API container
         run: |
           IMAGE="${{ secrets.DOCKERHUB_USERNAME }}/bd-lab-1-6:latest"
