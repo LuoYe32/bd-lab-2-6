@@ -13,6 +13,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate required secrets
+        run: |
+          if [ -z "${{ secrets.QDRANT_API_KEY }}" ]; then
+            echo "QDRANT_API_KEY is missing"
+            exit 1
+          fi
+
+          if [ -z "${{ secrets.DOCKERHUB_USERNAME }}" ]; then
+            echo "DOCKERHUB_USERNAME is missing"
+            exit 1
+          fi
+
+          if [ -z "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
+            echo "DOCKERHUB_TOKEN is missing"
+            exit 1
+          fi
+
       - name: Login to DockerHub
         uses: docker/login-action@v3
         with:

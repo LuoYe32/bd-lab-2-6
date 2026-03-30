@@ -28,6 +28,23 @@ jobs:
           pip install -r requirements.txt
           pip install "pathspec==0.12.1"
 
+      - name: Validate required secrets
+        run: |
+          if [ -z "${{ secrets.QDRANT_API_KEY }}" ]; then
+            echo "QDRANT_API_KEY is missing"
+            exit 1
+          fi
+      
+          if [ -z "${{ secrets.DOCKERHUB_USERNAME }}" ]; then
+            echo "DOCKERHUB_USERNAME is missing"
+            exit 1
+          fi
+      
+          if [ -z "${{ secrets.DOCKERHUB_TOKEN }}" ]; then
+            echo "DOCKERHUB_TOKEN is missing"
+            exit 1
+          fi
+
       - name: Start Qdrant
         run: |
           docker network create app-net || true
